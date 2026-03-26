@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """
 Routes — Déclenchement des travaux MapReduce.
 POST /run/<job>  : copie les scripts dans le conteneur namenode et exécute
@@ -16,15 +18,12 @@ from utils.docker_exec import (
 log     = logging.getLogger(__name__)
 jobs_bp = Blueprint("jobs", __name__)
 
-# ─── Répertoire des scripts MapReduce (relatif à flask_app) ──────────────────
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 MR_DIR       = os.path.join(PROJECT_ROOT, "mapreduce")
 
-# ─── Chemins HDFS ────────────────────────────────────────────────────────────
 HDFS_INPUT  = "/traffic/raw/data.csv"
 HDFS_OUTPUT = "/traffic/output"
 
-# ─── Définition des 4 travaux MapReduce ──────────────────────────────────────
 JOBS = {
     "vehicle_count": {
         "mapper":  os.path.join(MR_DIR, "job1_vehicle_count", "mapper.py"),
@@ -52,7 +51,6 @@ JOBS = {
     },
 }
 
-# Répertoire de travail à l'intérieur du conteneur pour les scripts MR
 CONTAINER_MR_DIR = "/tmp/stms_mapreduce"
 
 
@@ -68,7 +66,6 @@ def _copy_scripts_to_container(job_key: str) -> tuple:
     job      = JOBS[job_key]
     dest_dir = f"{CONTAINER_MR_DIR}/{job_key}"
 
-    # Création du répertoire cible dans le conteneur
     mk = subprocess.run(
         ["docker", "exec", CONTAINER_NAMENODE, "mkdir", "-p", dest_dir],
         capture_output=True, text=True, timeout=15,
@@ -76,7 +73,6 @@ def _copy_scripts_to_container(job_key: str) -> tuple:
     if mk.returncode != 0:
         raise RuntimeError(f"Impossible de créer {dest_dir} : {mk.stderr}")
 
-    # Copie du mapper
     for label, local_path in [("mapper", job["mapper"]), ("reducer", job["reducer"])]:
         r = subprocess.run(
             ["docker", "cp", local_path, f"{CONTAINER_NAMENODE}:{dest_dir}/"],
@@ -106,17 +102,13 @@ def _run_single_job(job_key: str) -> dict:
     job = JOBS[job_key]
     log.info("Lancement : %s", job["label"])
 
-    # Suppression de la sortie précédente
     hdfs_rm(job["output"])
 
-    # Copie des scripts dans le conteneur
     mapper_path, reducer_path = _copy_scripts_to_container(job_key)
 
-    # Rendre les scripts exécutables
     docker_exec(CONTAINER_NAMENODE,
                 ["chmod", "+x", mapper_path, reducer_path], timeout=10)
 
-    # Construction de la commande Hadoop Streaming
     streaming_cmd = [
         "hadoop", "jar", STREAMING_JAR,
         "-files", f"{mapper_path},{reducer_path}",
@@ -155,7 +147,6 @@ def run_job(job: str):
             "error":   f"Travail inconnu : '{job}'. Valides : {valid}",
         }), 400
 
-    # Sélection des travaux à exécuter
     jobs_to_run = list(JOBS.keys()) if job == "all" else [job]
 
     results   = {}

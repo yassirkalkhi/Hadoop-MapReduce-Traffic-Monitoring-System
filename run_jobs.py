@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Lance les travaux MapReduce via 'docker exec namenode'.
 Remplace run_jobs.sh pour compatibilité Windows / Linux.
@@ -15,7 +15,6 @@ import os
 import subprocess
 import time
 
-# ─── Configuration ───────────────────────────────────────────────────────────
 CONTAINER_NN  = "namenode"
 CONTAINER_MR  = "/tmp/stms_mapreduce"
 HDFS_INPUT    = "/traffic/raw/data.csv"
@@ -57,7 +56,6 @@ JOBS = {
         "output":  HDFS_OUTPUT + "/congestion",
     },
 }
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 def log(msg):
@@ -138,19 +136,16 @@ def run_job(job_id):
         timeout=30,
     )
 
-    # ── Copie des scripts dans le conteneur ──────────────────────────────
     log("Copie des scripts dans le conteneur...")
     mapper_path  = copy_script(job["mapper"],  job["key"])
     reducer_path = copy_script(job["reducer"], job["key"])
 
-    # Rendre les scripts exécutables
     run_cmd(
         ["docker", "exec", CONTAINER_NN, "chmod", "+x",
          mapper_path, reducer_path],
         timeout=10,
     )
 
-    # ── Lancement de Hadoop Streaming ────────────────────────────────────
     log("Lancement de Hadoop Streaming...")
     t0 = time.time()
 
@@ -184,7 +179,6 @@ def main():
     print("  " + time.strftime("%Y-%m-%d %H:%M:%S"))
     print("=" * 60)
 
-    # Sélection des travaux depuis les arguments de la ligne de commande
     args = sys.argv[1:]
     if not args:
         print("Usage : python run_jobs.py all | job1 | job2 | job3 | job4")
@@ -199,12 +193,10 @@ def main():
             log("[ERREUR] Travaux inconnus : {0}".format(", ".join(invalid)))
             sys.exit(1)
 
-    # Exécution des travaux sélectionnés
     results = {}
     for job_id in selected:
         results[job_id] = run_job(job_id)
 
-    # Résumé final
     print("")
     print("=" * 60)
     print("  RÉSUMÉ")

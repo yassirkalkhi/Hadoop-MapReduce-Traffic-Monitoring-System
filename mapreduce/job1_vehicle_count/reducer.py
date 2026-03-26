@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 from __future__ import print_function
 """
 Reducer — Comptage de véhicules par route.
@@ -26,11 +28,11 @@ for line in sys.stdin:
         continue   # Valeur non entière, ignorée
 
     if road_id == current_road:
-        current_count += count
+        current_count = int(current_count) + int(count)
     else:
         if current_road is not None:
             print("{0}\t{1}".format(current_road, current_count))
         current_road  = road_id
-        current_count = count
+        current_count = int(count)
 if current_road is not None:
     print("{0}\t{1}".format(current_road, current_count))

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """
 Routes — Lecture et exposition des résultats MapReduce.
 GET /data/<job>  : retourne les données du travail en JSON.
@@ -25,7 +27,6 @@ def parse_vehicle_count(lines: list[str]) -> list[dict]:
             })
         except ValueError:
             log.warning(f"Ligne malformée ignorée (vehicle_count) : {line!r}")
-    # Tri décroissant par valeur
     return sorted(results, key=lambda x: x["value"], reverse=True)
 
 
@@ -43,7 +44,6 @@ def parse_avg_speed(lines: list[str]) -> list[dict]:
             })
         except ValueError:
             log.warning(f"Ligne malformée ignorée (avg_speed) : {line!r}")
-    # Tri croissant : les routes les plus lentes en premier
     return sorted(results, key=lambda x: x["value"])
 
 
@@ -61,7 +61,6 @@ def parse_peak_hours(lines: list[str]) -> list[dict]:
             })
         except ValueError:
             log.warning(f"Ligne malformée ignorée (peak_hours) : {line!r}")
-    # Tri par heure pour l'affichage chronologique
     return sorted(results, key=lambda x: x["hour"])
 
 
@@ -81,11 +80,9 @@ def parse_congestion(lines: list[str]) -> list[dict]:
             })
         except ValueError:
             log.warning(f"Ligne malformée ignorée (congestion) : {line!r}")
-    # Routes congestionnées en premier, puis par vitesse croissante
     return sorted(results, key=lambda x: (not x["congested"], x["avg_speed"]))
 
 
-# Correspondance nom de travail → parseur
 PARSERS = {
     "vehicle_count": parse_vehicle_count,
     "avg_speed":     parse_avg_speed,

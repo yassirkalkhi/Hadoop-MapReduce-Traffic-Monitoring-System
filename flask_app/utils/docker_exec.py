@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """
 Utilitaires Docker — exécution de commandes dans les conteneurs.
 Toutes les interactions HDFS / HBase passent par ce module.
@@ -7,15 +9,11 @@ import subprocess
 import logging
 import sys
 
-# ─── Journalisation ──────────────────────────────────────────────────────────
 log = logging.getLogger(__name__)
 
-# ─── Noms des conteneurs (doivent correspondre au docker-compose) ─────────────
 CONTAINER_NAMENODE   = "namenode"
 CONTAINER_HBASE      = "hbase-master"
 
-# ─── Chemins dans les conteneurs ─────────────────────────────────────────────
-# Chemin vers le JAR Hadoop Streaming dans le namenode (Hadoop 3.2.1)
 STREAMING_JAR = (
     "/opt/hadoop-3.2.1/share/hadoop/tools/lib/hadoop-streaming-3.2.1.jar"
 )

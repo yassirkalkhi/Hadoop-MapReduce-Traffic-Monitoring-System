@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """
 Utilitaires partagés — lecture des résultats MapReduce depuis HDFS.
 Toutes les opérations HDFS passent par 'docker exec namenode'.
@@ -7,10 +9,8 @@ import logging
 import sys
 import os
 
-# ─── Journalisation ──────────────────────────────────────────────────────────
 log = logging.getLogger(__name__)
 
-# ─── Chemin du journal d'erreurs (compatible Windows et Linux) ────────────────
 LOG_FILE = os.path.join(os.path.expanduser("~"), "stms_flask.log")
 
 logging.basicConfig(
@@ -22,10 +22,8 @@ logging.basicConfig(
     ],
 )
 
-# ─── Import du module Docker après la configuration du logging ────────────────
 from utils.docker_exec import hdfs_cat, hdfs_path_exists
 
-# ─── Chemins HDFS ────────────────────────────────────────────────────────────
 HDFS_OUTPUT_BASE = "/traffic/output"
 
 JOB_PATHS = {

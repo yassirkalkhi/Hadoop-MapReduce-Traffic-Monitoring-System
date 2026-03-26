@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """
 Routes — Vérification du statut des résultats disponibles.
 GET /status  : retourne la disponibilité de chaque travail.

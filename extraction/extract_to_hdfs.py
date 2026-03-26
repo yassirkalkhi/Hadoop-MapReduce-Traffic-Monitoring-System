@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Extracteur HBase → HDFS.
 Note : le CSV d'entrée est déjà présent dans HDFS après l'étape de génération.
@@ -19,7 +20,6 @@ import time
 import logging
 import re
 
-# ─── Journalisation ──────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -27,14 +27,12 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ─── Configuration ───────────────────────────────────────────────────────────
 CONTAINER_HBASE  = "hbase-master"
 CONTAINER_NN     = "namenode"
 HBASE_TABLE      = "traffic_data"
 HDFS_RAW_PATH    = "/traffic/raw/data.csv"
 CONTAINER_TMP    = "/tmp/stms_extract.csv"
 CHUNK_SIZE       = 500    # Lignes de scan HBase par lot (LIMIT dans le shell)
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 def check_hdfs_input_exists() -> bool:
@@ -66,7 +64,6 @@ def get_row_count() -> int:
         ["docker", "exec", "-i", CONTAINER_HBASE, "hbase", "shell"],
         input=shell_cmd, capture_output=True, text=True, timeout=300,
     )
-    # Recherche du nombre dans la sortie (ex: "50000 row(s)")
     match = re.search(r"(\d+)\s+row\(s\)", r.stdout)
     if match:
         return int(match.group(1))
@@ -93,11 +90,9 @@ def export_hbase_to_hdfs() -> None:
         is_first    = True
 
         with open(tmp_path, "w", encoding="utf-8") as out_f:
-            # En-tête CSV
             out_f.write("road_id,timestamp,vehicle_id,speed,lat,lon\n")
 
             while True:
-                # Construction du script HBase Shell pour ce lot
                 if start_row:
                     scan_script = (
                         "scan '{table}', {{STARTROW => '{sr}', LIMIT => {lim}}}\nexit\n"
@@ -107,7 +102,6 @@ def export_hbase_to_hdfs() -> None:
                         "scan '{table}', {{LIMIT => {lim}}}\nexit\n"
                     ).format(table=HBASE_TABLE, lim=CHUNK_SIZE + 1)
 
-                # Exécution du scan dans le shell HBase
                 r = subprocess.run(
                     ["docker", "exec", "-i", CONTAINER_HBASE, "hbase", "shell"],
                     input=scan_script,
@@ -118,15 +112,12 @@ def export_hbase_to_hdfs() -> None:
                     log.error("Scan HBase échoué : %s", r.stderr[:300])
                     raise RuntimeError("Scan HBase a échoué.")
 
-                # Analyse de la sortie du shell (format : lignes "cf:col = val")
                 rows       = _parse_hbase_output(r.stdout)
                 batch_size = len(rows)
 
                 if batch_size == 0:
                     break   # Plus de données à lire
 
-                # Écriture du lot dans le CSV (on ignore la première ligne
-                # si ce n'est pas le premier lot, car c'est la clé de répétition)
                 write_rows = rows[1:] if not is_first and batch_size > 1 else rows
                 for row_csv in write_rows:
                     out_f.write(row_csv + "\n")
@@ -134,13 +125,11 @@ def export_hbase_to_hdfs() -> None:
 
                 is_first = False
 
-                # Mise à jour de la clé de début pour le prochain lot
                 last_key = _extract_last_key(r.stdout)
                 if not last_key or batch_size <= CHUNK_SIZE:
                     break   # Dernier lot atteint
                 start_row = last_key
 
-                # Rapport de progression
                 if total_rows % 100_000 < CHUNK_SIZE:
                     elapsed = time.time() - t0
                     log.info("  %s lignes exportées (%s lignes/s)...",
@@ -151,7 +140,6 @@ def export_hbase_to_hdfs() -> None:
         log.info("[OK] Export HBase terminé : %s lignes en %.1fs.",
                  f"{total_rows:,}", elapsed)
 
-        # Upload vers HDFS
         _upload_csv_to_hdfs(tmp_path)
 
     finally:
@@ -175,9 +163,7 @@ def _parse_hbase_output(shell_output: str) -> list:
 
     for line in shell_output.splitlines():
         line = line.strip()
-        # Ligne de données : commence par la clé de ligne + tab + "column=..."
         if "\t" in line and "column=" in line:
-            # Ex: A1#9999..#VH00001	column=cf:speed, timestamp=..., value=70.5
             parts  = line.split("\t", 1)
             col_part = parts[1] if len(parts) > 1 else ""
 
@@ -187,14 +173,12 @@ def _parse_hbase_output(shell_output: str) -> list:
                 col_value = col_match.group(2).strip()
                 current[col_name] = col_value
         elif line.startswith("ROW") or line.startswith("---") or not line:
-            # Séparateur : émettre la ligne courante si complète
             if current:
                 csv_line = _build_csv_line(current)
                 if csv_line:
                     results.append(csv_line)
                 current = {}
 
-    # Émettre la dernière entrée
     if current:
         csv_line = _build_csv_line(current)
         if csv_line:
@@ -237,7 +221,6 @@ def _upload_csv_to_hdfs(local_path: str) -> None:
     :param local_path: Chemin du fichier CSV local.
     :raises RuntimeError: Si la copie ou l'upload échoue.
     """
-    # Copie dans le conteneur namenode
     r = subprocess.run(
         ["docker", "cp", local_path,
          "{0}:{1}".format(CONTAINER_NN, CONTAINER_TMP)],
@@ -246,21 +229,18 @@ def _upload_csv_to_hdfs(local_path: str) -> None:
     if r.returncode != 0:
         raise RuntimeError("docker cp échoué : {0}".format(r.stderr))
 
-    # Suppression de l'ancien fichier HDFS
     subprocess.run(
         ["docker", "exec", CONTAINER_NN,
          "hdfs", "dfs", "-rm", "-f", HDFS_RAW_PATH],
         capture_output=True, text=True, timeout=30,
     )
 
-    # Création du répertoire parent
     subprocess.run(
         ["docker", "exec", CONTAINER_NN,
          "hdfs", "dfs", "-mkdir", "-p", "/traffic/raw"],
         capture_output=True, text=True, timeout=30,
     )
 
-    # Upload
     r = subprocess.run(
         ["docker", "exec", CONTAINER_NN,
          "hdfs", "dfs", "-put", CONTAINER_TMP, HDFS_RAW_PATH],
@@ -271,14 +251,12 @@ def _upload_csv_to_hdfs(local_path: str) -> None:
     log.info("[OK] CSV uploadé vers HDFS : %s", HDFS_RAW_PATH)
 
 
-# ─── Point d'entrée ──────────────────────────────────────────────────────────
 
 def main() -> None:
     print("=" * 60)
     print("  STMS — Extracteur HBase → HDFS")
     print("=" * 60)
 
-    # Vérification si le fichier HDFS existe déjà
     if check_hdfs_input_exists():
         log.info(
             "[INFO] Le fichier HDFS '%s' existe déjà.\n"

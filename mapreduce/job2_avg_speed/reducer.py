@@ -32,7 +32,6 @@ for line in sys.stdin:
         total_speed += speed
         count       += 1
     else:
-        # Émettre la moyenne pour la route précédente
         if current_road is not None and count > 0:
             avg = round(total_speed / count, 2)
             print("{0}\t{1}".format(current_road, avg))
@@ -40,7 +39,6 @@ for line in sys.stdin:
         total_speed  = speed
         count        = 1
 
-# Émettre le dernier groupe
 if current_road is not None and count > 0:
     avg = round(total_speed / count, 2)
     print("{0}\t{1}".format(current_road, avg))

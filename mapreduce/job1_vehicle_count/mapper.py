@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 from __future__ import print_function
 """
 Mapper — Comptage de véhicules par route.
@@ -10,7 +11,6 @@ import sys
 
 for line in sys.stdin:
     line = line.strip()
-    # Ignorer l'en-tête et les lignes vides
     if not line or line.startswith("row_key"):
         continue
 
