@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="STMS — Tableau de bord de surveillance intelligente du trafic routier. Analyse en temps réel via HBase et MapReduce." />
+  <title>STMS — Surveillance du Trafic</title>
+
+  <!-- Police Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Feuille de style principale -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
+  
+  <!-- BoxIcons (Polices d'icônes) -->
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet" />
+
+  <!-- Chart.js (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     STRUCTURE DE L'APPLICATION
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div class="app-wrapper">
+
+  <!-- ─── Barre latérale ────────────────────────────────────────────────── -->
+  <aside class="sidebar" role="navigation" aria-label="Navigation principale">
+
+    <!-- Marque / Logo -->
+    <div class="sidebar-brand">
+      <div  aria-hidden="true"><i class='bx bx-traffic-cone'></i></div>
+      <div>
+        <div class="brand-title">STMS</div>
+        <div class="brand-subtitle">Traffic Monitor</div>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="sidebar-nav">
+      <div class="nav-label">Vues</div>
+
+      <a class="nav-item active" data-section="overview" id="nav-overview" role="button" tabindex="0">
+        <span class="nav-icon" aria-hidden="true"><i class='bx bx-bar-chart-alt-2'></i></span>
+        Vue d'ensemble
+      </a>
+
+      <a class="nav-item" data-section="charts" id="nav-charts" role="button" tabindex="0">
+        <span class="nav-icon" aria-hidden="true"><i class='bx bx-line-chart'></i></span>
+        Graphiques
+      </a>
+
+      <a class="nav-item" data-section="congestion" id="nav-congestion" role="button" tabindex="0">
+        <span class="nav-icon" aria-hidden="true"><i class='bx bx-alarm-exclamation'></i></span>
+        Congestion
+      </a>
+
+      <a class="nav-item" data-section="tables" id="nav-tables" role="button" tabindex="0">
+        <span class="nav-icon" aria-hidden="true"><i class='bx bx-table'></i></span>
+        Tableaux
+      </a>
+
+      <div class="nav-label">Contrôle</div>
+
+      <a class="nav-item" data-section="jobs" id="nav-jobs" role="button" tabindex="0">
+        <span class="nav-icon" aria-hidden="true"><i class='bx bx-cog'></i></span>
+        Travaux MapReduce
+      </a>
+    </nav>
+
+    <!-- Pied de barre latérale -->
+    <div class="sidebar-footer">
+      <div class="system-status">
+        <div class="status-dot"></div>
+        <span>Système opérationnel</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ─── Contenu principal ─────────────────────────────────────────────── -->
+  <main class="main-content">
+
+    <!-- En-tête -->
+    <header class="topbar">
+      <div>
+        <h1 class="topbar-title">Tableau de bord</h1>
+        <p class="topbar-subtitle">Surveillance intelligente du trafic routier</p>
+      </div>
+      <div class="topbar-actions">
+        <span class="timestamp" id="clock" aria-live="polite">—</span>
+        <button class="btn btn-secondary btn-sm" id="btn-refresh" onclick="loadAllData()" aria-label="Actualiser les données">
+          <span class="btn-icon"><i class='bx bx-refresh'></i></span>
+          Actualiser
+        </button>
+      </div>
+    </header>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SECTION 1 : VUE D'ENSEMBLE
+         ══════════════════════════════════════════════════════════════════ -->
+    <section id="section-overview" class="page page-section">
+
+      <!-- Cartes de statistiques clés -->
+      <div class="stats-grid" role="region" aria-label="Indicateurs clés">
+
+        <!-- Total véhicules -->
+        <div class="stat-card" id="kpi-total">
+          <div class="stat-header">
+            <span class="stat-label">Total véhicules</span>
+            <div class="stat-icon blue" aria-hidden="true"><i class='bx bx-car'></i></div>
+          </div>
+          <div class="stat-value" id="stat-total-vehicles">—</div>
+          <div class="stat-meta">Toutes routes confondues</div>
+        </div>
+
+        <!-- Vitesse moyenne globale -->
+        <div class="stat-card warning" id="kpi-speed">
+          <div class="stat-header">
+            <span class="stat-label">Vitesse moyenne</span>
+            <div class="stat-icon amber" aria-hidden="true"><i class='bx bx-tachometer'></i></div>
+          </div>
+          <div class="stat-value" id="stat-avg-speed">—</div>
+          <div class="stat-meta">Moyenne statique toutes routes</div>
+        </div>
+
+        <!-- Route la plus congestionnée -->
+        <div class="stat-card danger" id="kpi-congested">
+          <div class="stat-header">
+            <span class="stat-label">Route congestionnée</span>
+            <div class="stat-icon red" aria-hidden="true"><i class='bx bx-error-alt'></i></div>
+          </div>
+          <div class="stat-value" id="stat-congested-road">—</div>
+          <div class="stat-meta" id="stat-congested-count">Aucune congestion détectée</div>
+        </div>
+
+        <!-- Nombre de routes analysées -->
+        <div class="stat-card success" id="kpi-roads">
+          <div class="stat-header">
+            <span class="stat-label">Routes analysées</span>
+            <div class="stat-icon green" aria-hidden="true"><i class='bx bx-map-pin'></i></div>
+          </div>
+          <div class="stat-value">18</div>
+          <div class="stat-meta">Dataset complet</div>
+        </div>
+      </div>
+
+      <!-- Graphiques d'aperçu -->
+      <div class="charts-grid" role="region" aria-label="Graphiques principaux">
+
+        <!-- Graphique : Véhicules par route (barres) -->
+        <div class="chart-card col-7">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Véhicules par route</div>
+              <div class="chart-subtitle">Volume total par identifiant de route</div>
+            </div>
+            <span class="chart-badge">Job 1</span>
+          </div>
+          <div class="chart-container" role="img" aria-label="Graphique en barres des véhicules par route">
+            <canvas id="chart-vehicle-count"></canvas>
+          </div>
+        </div>
+
+        <!-- Graphique : Trafic par heure (zone) -->
+        <div class="chart-card col-5">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Trafic horaire</div>
+              <div class="chart-subtitle">Distribution des passages dans la journée</div>
+            </div>
+            <span class="chart-badge amber">Job 3</span>
+          </div>
+          <div class="chart-container" role="img" aria-label="Graphique de zone du trafic horaire">
+            <canvas id="chart-peak-hours"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SECTION 2 : GRAPHIQUES DÉTAILLÉS
+         ══════════════════════════════════════════════════════════════════ -->
+    <section id="section-charts" class="page page-section d-none">
+
+      <div class="charts-grid">
+
+        <!-- Vitesse moyenne par route (ligne) -->
+        <div class="chart-card col-12">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Vitesse moyenne par route</div>
+              <div class="chart-subtitle">Classement des routes par vitesse moyenne (km/h)</div>
+            </div>
+            <span class="chart-badge" style="--chart-badge-bg:rgba(99,102,241,0.12);color:#a5b4fc">Job 2</span>
+          </div>
+          <div class="chart-container" style="height:300px" role="img" aria-label="Graphique en ligne des vitesses moyennes">
+            <canvas id="chart-avg-speed"></canvas>
+          </div>
+        </div>
+
+        <!-- Redisplay des deux graphiques de la vue d'ensemble -->
+        <div class="chart-card col-6">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Comptage véhicules (détail)</div>
+              <div class="chart-subtitle">Volume absolu par route</div>
+            </div>
+            <span class="chart-badge">Job 1</span>
+          </div>
+          <div class="chart-container" style="height:280px">
+            <canvas id="chart-vehicle-count-2"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card col-6">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Distribution horaire</div>
+              <div class="chart-subtitle">Passages par tranches d'heure</div>
+            </div>
+            <span class="chart-badge amber">Job 3</span>
+          </div>
+          <div class="chart-container" style="height:280px">
+            <canvas id="chart-peak-hours-2"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SECTION 3 : CONGESTION
+         ══════════════════════════════════════════════════════════════════ -->
+    <section id="section-congestion" class="page page-section d-none">
+
+      <h2 class="section-title"><i class='bx bx-error' style='margin-right: 8px'></i> Détection de congestion</h2>
+
+      <div class="table-section" role="region" aria-label="Tableau de congestion">
+        <div class="table-header">
+          <span class="table-title">État du trafic par route</span>
+          <span class="chart-badge red">Seuil : &lt; 20 km/h ET &gt; 500 véhicules</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table aria-label="Routes et état de congestion">
+            <thead>
+              <tr>
+                <th>Route</th>
+                <th>Vitesse moy.</th>
+                <th>Nb. véhicules</th>
+                <th>Statut</th>
+              </tr>
+            </thead>
+            <tbody id="table-congestion">
+              <tr><td colspan="4" class="text-muted" style="text-align:center;padding:2rem">
+                Les données s'afficheront ici après exécution du <strong>Job 4</strong>.
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SECTION 4 : TABLEAUX ANALYTIQUES
+         ══════════════════════════════════════════════════════════════════ -->
+    <section id="section-tables" class="page page-section d-none">
+
+      <h2 class="section-title"><i class='bx bx-folder-open' style='margin-right: 8px'></i> Analyses détaillées</h2>
+
+      <!-- Table : Top 10 routes les plus chargées -->
+      <div class="table-section" role="region" aria-label="Routes les plus chargées" style="margin-bottom:1.5rem">
+        <div class="table-header">
+          <span class="table-title">Top 10 — Routes les plus chargées</span>
+          <span class="chart-badge">Job 1</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table aria-label="Top 10 routes par volume de véhicules">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Route</th>
+                <th>Véhicules</th>
+                <th>Part (%)</th>
+              </tr>
+            </thead>
+            <tbody id="table-vehicle-count">
+              <tr><td colspan="4" class="text-muted" style="text-align:center;padding:2rem">
+                Exécutez le <strong>Job 1</strong> pour afficher les données.
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Table : Top 10 routes les plus lentes -->
+      <div class="table-section" role="region" aria-label="Routes les plus lentes">
+        <div class="table-header">
+          <span class="table-title">Top 10 — Routes les plus lentes</span>
+          <span class="chart-badge" style="color:#a5b4fc">Job 2</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table aria-label="Top 10 routes par vitesse moyenne">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Route</th>
+                <th>Vitesse moyenne (km/h)</th>
+              </tr>
+            </thead>
+            <tbody id="table-avg-speed">
+              <tr><td colspan="3" class="text-muted" style="text-align:center;padding:2rem">
+                Exécutez le <strong>Job 2</strong> pour afficher les données.
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SECTION 5 : GESTION DES TRAVAUX MAPREDUCE
+         ══════════════════════════════════════════════════════════════════ -->
+    <section id="section-jobs" class="page page-section d-none">
+
+      <h2 class="section-title"><i class='bx bx-cog' style='margin-right: 8px'></i> Travaux MapReduce</h2>
+
+      <!-- Bouton "Lancer tous les travaux" -->
+      <div style="margin-bottom:var(--spacing-xl)">
+        <button class="btn btn-primary" id="btn-run-all"
+                onclick="runJob('all')" aria-label="Lancer tous les travaux MapReduce">
+          <span class="btn-icon"><i class='bx bx-play'></i></span>
+          Lancer tous les travaux
+        </button>
+        <button class="btn btn-secondary" style="margin-left:0.75rem"
+                onclick="loadStatus()" aria-label="Vérifier la disponibilité des résultats">
+          <span class="btn-icon"><i class='bx bx-search'></i></span>
+          Vérifier l'état
+        </button>
+      </div>
+
+      <!-- Cartes de travaux individuels -->
+      <div class="actions-grid" role="list" aria-label="Travaux individuels">
+
+        <!-- Job 1 : Comptage véhicules -->
+        <div class="job-card" role="listitem">
+          <div>
+            <div class="job-name"><i class='bx bx-bar-chart-alt-2' style='margin-right: 5px'></i> Job 1 — Comptage véhicules</div>
+            <div class="job-description">
+              Compte le nombre de véhicules par route.<br/>
+              Mapper : route → 1 &nbsp;|&nbsp; Reducer : somme
+            </div>
+          </div>
+          <div class="job-status-indicator" id="status-vehicle_count">
+            <span class="job-dot missing"></span>
+            <span class="text-muted">En attente d'exécution</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-run-vehicle_count"
+                  onclick="runJob('vehicle_count')" aria-label="Lancer le Job 1">
+            <span class="btn-icon"><i class='bx bx-play'></i></span> Lancer
+          </button>
+        </div>
+
+        <!-- Job 2 : Vitesse moyenne -->
+        <div class="job-card" role="listitem">
+          <div>
+            <div class="job-name"><i class='bx bx-tachometer' style='margin-right: 5px'></i> Job 2 — Vitesse moyenne</div>
+            <div class="job-description">
+              Calcule la vitesse moyenne par route.<br/>
+              Mapper : route → vitesse &nbsp;|&nbsp; Reducer : moy.
+            </div>
+          </div>
+          <div class="job-status-indicator" id="status-avg_speed">
+            <span class="job-dot missing"></span>
+            <span class="text-muted">En attente d'exécution</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-run-avg_speed"
+                  onclick="runJob('avg_speed')" aria-label="Lancer le Job 2">
+            <span class="btn-icon"><i class='bx bx-play'></i></span> Lancer
+          </button>
+        </div>
+
+        <!-- Job 3 : Heures de pointe -->
+        <div class="job-card" role="listitem">
+          <div>
+            <div class="job-name"><i class='bx bx-time' style='margin-right: 5px'></i> Job 3 — Heures de pointe</div>
+            <div class="job-description">
+              Analyse la distribution du trafic par heure.<br/>
+              Mapper : heure → 1 &nbsp;|&nbsp; Reducer : total
+            </div>
+          </div>
+          <div class="job-status-indicator" id="status-peak_hours">
+            <span class="job-dot missing"></span>
+            <span class="text-muted">En attente d'exécution</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-run-peak_hours"
+                  onclick="runJob('peak_hours')" aria-label="Lancer le Job 3">
+            <span class="btn-icon"><i class='bx bx-play'></i></span> Lancer
+          </button>
+        </div>
+
+        <!-- Job 4 : Détection de congestion -->
+        <div class="job-card" role="listitem">
+          <div>
+            <div class="job-name"><i class='bx bx-alarm-exclamation' style='margin-right: 5px'></i> Job 4 — Congestion</div>
+            <div class="job-description">
+              Détecte les routes congestionnées.<br/>
+              Critère : vitesse &lt; 20 km/h ET vehicles &gt; 500
+            </div>
+          </div>
+          <div class="job-status-indicator" id="status-congestion">
+            <span class="job-dot missing"></span>
+            <span class="text-muted">En attente d'exécution</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-run-congestion"
+                  onclick="runJob('congestion')" aria-label="Lancer le Job 4">
+            <span class="btn-icon"><i class='bx bx-play'></i></span> Lancer
+          </button>
+        </div>
+      </div>
+
+      <!-- Instructions d'utilisation -->
+      <div class="chart-card" style="margin-top:var(--spacing-xl)">
+        <div class="chart-header">
+          <div class="chart-title"><i class='bx bx-book-open' style='margin-right: 5px'></i> Instructions d'utilisation</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;padding-top:0.5rem">
+          <div>
+            <div style="font-weight:600;margin-bottom:0.5rem;color:var(--color-text-primary)">1. Générer les données</div>
+            <div style="font-size:0.8rem;color:var(--color-text-muted);line-height:1.7">
+              Exécuter <code style="color:#60a5fa;background:rgba(59,130,246,0.1);padding:1px 5px;border-radius:4px">python generate_traffic_data.py</code><br/>
+              dans le dossier <code style="color:#60a5fa">data_generator/</code>
+            </div>
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:0.5rem;color:var(--color-text-primary)">2. Extraire vers HDFS</div>
+            <div style="font-size:0.8rem;color:var(--color-text-muted);line-height:1.7">
+              Exécuter <code style="color:#60a5fa;background:rgba(59,130,246,0.1);padding:1px 5px;border-radius:4px">python extract_to_hdfs.py</code><br/>
+              dans le dossier <code style="color:#60a5fa">extraction/</code>
+            </div>
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:0.5rem;color:var(--color-text-primary)">3. Lancer les travaux</div>
+            <div style="font-size:0.8rem;color:var(--color-text-muted);line-height:1.7">
+              Cliquer sur <em>Lancer tous les travaux</em> ou exécuter manuellement<br/>
+              <code style="color:#60a5fa;background:rgba(59,130,246,0.1);padding:1px 5px;border-radius:4px">bash run_jobs.sh all</code>
+            </div>
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:0.5rem;color:var(--color-text-primary)">4. Visualiser</div>
+            <div style="font-size:0.8rem;color:var(--color-text-muted);line-height:1.7">
+              Le tableau de bord se met à jour automatiquement après chaque travail.
+              Cliquer sur <em>Actualiser</em> pour forcer le rechargement.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ─── Conteneur de toasts ────────────────────────────────────────────── -->
+<div class="toast-container" id="toast-container" role="status" aria-live="polite"></div>
+
+<!-- Script principal -->
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
